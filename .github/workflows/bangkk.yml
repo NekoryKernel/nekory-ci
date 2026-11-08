@@ -1,4 +1,3 @@
-
 name: Nekory Kernel - bangkk
 
 on:
@@ -26,8 +25,6 @@ jobs:
       TARGET_PRODUCT: bangkk
       LLVM: "1"
       KCFLAGS: -Wno-incompatible-function-pointer-types
-      KERNEL_REPO: rebangkkuser/android_kernel_motorola_sm6375
-      KERNEL_BRANCH: lineage-24.0
       DEFCONFIG: nekory_bangkk_defconfig
 
     steps:
@@ -36,12 +33,13 @@ jobs:
           echo "bangkkuser@github-actions-NekoryKernel"
           echo "Device: Motorola SM6375"
           echo "Target: bangkk"
-          echo "Branch: $KERNEL_BRANCH"
+          echo "Kernel branch: lineage-24.0"
+          echo "AnyKernel3 branch: motorola"
 
       - name: Checkout kernel
         uses: actions/checkout@v4
         with:
-          repository: rebangkkuser/android_kernel_motorola_sm6375
+          repository: NekoryKernel/android_kernel_motorola_sm6375
           ref: lineage-24.0
           path: kernel
           submodules: recursive
@@ -50,10 +48,16 @@ jobs:
       - name: Checkout AnyKernel3
         uses: actions/checkout@v4
         with:
-          repository: samw662/AnyKernel3
-          ref: bangkk
+          repository: NekoryKernel/AnyKernel3
+          ref: motorola
           path: AnyKernel3
           fetch-depth: 1
+
+      - name: Checkout CI configuration
+        uses: actions/checkout@v4
+        with:
+          repository: NekoryKernel/nekory-ci
+          path: ci
 
       - name: Install host dependencies
         run: |
@@ -93,36 +97,39 @@ jobs:
           llvm-readelf --version
           llvm-strip --version
 
+      - name: Validate repositories
+        run: |
+          test -f kernel/Makefile
+          test -f AnyKernel3/anykernel.sh
+          test -f AnyKernel3/tools/ak3-core.sh
+          test -f ci/$DEFCONFIG
+
+          grep -q 'device.name1=bangkk' AnyKernel3/anykernel.sh
+          grep -q 'kernel.string=—WearyStars⭐-Sunlight' AnyKernel3/anykernel.sh
+
       - name: Prepare defconfig
         run: |
-          test -f "$GITHUB_WORKSPACE/$DEFCONFIG"
-
-          cp "$GITHUB_WORKSPACE/$DEFCONFIG" \
+          cp "ci/$DEFCONFIG" \
             "kernel/arch/arm64/configs/$DEFCONFIG"
 
-          echo "Defconfig installed:"
-          ls -l "kernel/arch/arm64/configs/$DEFCONFIG"
+          mkdir -p "$GITHUB_WORKSPACE/kernel/out"
 
       - name: Configure kernel
         run: |
-          mkdir -p kernel/out
-
           make -C kernel \
-            O=out \
+            O="$GITHUB_WORKSPACE/kernel/out" \
             ARCH=arm64 \
             LLVM=1 \
             HOSTCC=gcc \
             HOSTCXX=g++ \
-            HOSTLD=g++ \
             "$DEFCONFIG"
 
           make -C kernel \
-            O=out \
+            O="$GITHUB_WORKSPACE/kernel/out" \
             ARCH=arm64 \
             LLVM=1 \
             HOSTCC=gcc \
             HOSTCXX=g++ \
-            HOSTLD=g++ \
             olddefconfig
 
           CONFIG="kernel/out/.config"
@@ -132,22 +139,17 @@ jobs:
           grep -qx '# CONFIG_KSU_SUSFS is not set' "$CONFIG"
           grep -qx 'CONFIG_KSU=y' "$CONFIG"
 
-          echo "Configuration validated."
+          echo "Kernel configuration validated."
 
       - name: Compile kernel
         run: |
-          export ARCH=arm64
-          export SUBARCH=arm64
-          export TARGET_PRODUCT=bangkk
-
           make -C kernel \
-            O=out \
+            O="$GITHUB_WORKSPACE/kernel/out" \
             ARCH=arm64 \
             SUBARCH=arm64 \
             LLVM=1 \
             HOSTCC=gcc \
             HOSTCXX=g++ \
-            HOSTLD=g++ \
             KCFLAGS="$KCFLAGS" \
             -j"$(nproc)" \
             Image.gz dtbs modules
@@ -155,12 +157,11 @@ jobs:
       - name: Install modules to staging
         run: |
           make -C kernel \
-            O=out \
+            O="$GITHUB_WORKSPACE/kernel/out" \
             ARCH=arm64 \
             LLVM=1 \
             HOSTCC=gcc \
             HOSTCXX=g++ \
-            HOSTLD=g++ \
             modules_install \
             INSTALL_MOD_PATH="$GITHUB_WORKSPACE/modules-staging"
 
@@ -177,13 +178,17 @@ jobs:
           cp -a kernel/out/arch/arm64/boot/dts \
             artifacts/dts
 
-          if [ -d modules-staging/lib/modules ]; then
-            cp -a modules-staging/lib/modules \
-              artifacts/modules
-          fi
+          cp kernel/out/.config artifacts/kernel.config
 
-          make -s -C kernel O=out ARCH=arm64 kernelrelease \
+          make -s -C kernel \
+            O="$GITHUB_WORKSPACE/kernel/out" \
+            ARCH=arm64 \
+            kernelrelease \
             > artifacts/kernel-release.txt
+
+          if [ -d modules-staging/lib/modules ]; then
+            cp -a modules-staging/lib/modules artifacts/modules
+          fi
 
           tar -czf artifacts/dtbs.tar.gz \
             -C artifacts dts
@@ -195,12 +200,11 @@ jobs:
 
       - name: Stage AnyKernel3 package
         run: |
+          # AnyKernel3 uses Image as its kernel payload.
           cp kernel/out/arch/arm64/boot/Image \
             AnyKernel3/Image
 
-          cp kernel/out/arch/arm64/boot/Image.gz \
-            AnyKernel3/Image.gz
-
+          # The installer copies this directory into vendor_boot.
           if [ -d modules-staging/lib/modules ]; then
             mkdir -p AnyKernel3/vendor_ramdisk/lib/modules
 
@@ -208,9 +212,12 @@ jobs:
               AnyKernel3/vendor_ramdisk/lib/modules/
           fi
 
+          mkdir -p artifacts
+
           cd AnyKernel3
+
           zip -r ../artifacts/NekoryKernel-bangkk.zip . \
-            -x ".git/*"
+            -x ".git" ".git/*"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -219,4 +226,3 @@ jobs:
           path: artifacts/
           if-no-files-found: error
           retention-days: 14
-          
