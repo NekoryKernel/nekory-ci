@@ -1,0 +1,222 @@
+
+name: Nekory Kernel - bangkk
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nekory-bangkk-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build SM6375 - bangkk
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+
+    env:
+      ARCH: arm64
+      SUBARCH: arm64
+      TARGET_PRODUCT: bangkk
+      LLVM: "1"
+      KCFLAGS: -Wno-incompatible-function-pointer-types
+      KERNEL_REPO: rebangkkuser/android_kernel_motorola_sm6375
+      KERNEL_BRANCH: lineage-24.0
+      DEFCONFIG: nekory_bangkk_defconfig
+
+    steps:
+      - name: Identify build
+        run: |
+          echo "bangkkuser@github-actions-NekoryKernel"
+          echo "Device: Motorola SM6375"
+          echo "Target: bangkk"
+          echo "Branch: $KERNEL_BRANCH"
+
+      - name: Checkout kernel
+        uses: actions/checkout@v4
+        with:
+          repository: rebangkkuser/android_kernel_motorola_sm6375
+          ref: lineage-24.0
+          path: kernel
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Checkout AnyKernel3
+        uses: actions/checkout@v4
+        with:
+          repository: samw662/AnyKernel3
+          ref: bangkk
+          path: AnyKernel3
+          fetch-depth: 1
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison build-essential cpio \
+            curl flex git kmod libelf-dev \
+            libssl-dev libncurses-dev lld \
+            llvm make pahole perl python3 \
+            rsync unzip zip gcc g++
+
+      - name: Install AOSP Clang
+        run: |
+          TOOLCHAIN="$RUNNER_TEMP/aosp-clang"
+
+          git clone \
+            --depth=1 \
+            --filter=blob:none \
+            --sparse \
+            --branch android-15.0.0_r3 \
+            https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 \
+            "$TOOLCHAIN"
+
+          git -C "$TOOLCHAIN" sparse-checkout set clang-r498229b
+
+          echo "$TOOLCHAIN/clang-r498229b/bin" >> "$GITHUB_PATH"
+
+      - name: Validate toolchain
+        run: |
+          clang --version
+          clang++ --version
+          ld.lld --version
+          llvm-ar --version
+          llvm-nm --version
+          llvm-objcopy --version
+          llvm-objdump --version
+          llvm-readelf --version
+          llvm-strip --version
+
+      - name: Prepare defconfig
+        run: |
+          test -f "$GITHUB_WORKSPACE/$DEFCONFIG"
+
+          cp "$GITHUB_WORKSPACE/$DEFCONFIG" \
+            "kernel/arch/arm64/configs/$DEFCONFIG"
+
+          echo "Defconfig installed:"
+          ls -l "kernel/arch/arm64/configs/$DEFCONFIG"
+
+      - name: Configure kernel
+        run: |
+          mkdir -p kernel/out
+
+          make -C kernel \
+            O=out \
+            ARCH=arm64 \
+            LLVM=1 \
+            HOSTCC=gcc \
+            HOSTCXX=g++ \
+            HOSTLD=g++ \
+            "$DEFCONFIG"
+
+          make -C kernel \
+            O=out \
+            ARCH=arm64 \
+            LLVM=1 \
+            HOSTCC=gcc \
+            HOSTCXX=g++ \
+            HOSTLD=g++ \
+            olddefconfig
+
+          CONFIG="kernel/out/.config"
+
+          grep -qx 'CONFIG_LOCALVERSION="-moto-NekoryKernel"' "$CONFIG"
+          grep -qx '# CONFIG_LOCALVERSION_AUTO is not set' "$CONFIG"
+          grep -qx '# CONFIG_KSU_SUSFS is not set' "$CONFIG"
+          grep -qx 'CONFIG_KSU=y' "$CONFIG"
+
+          echo "Configuration validated."
+
+      - name: Compile kernel
+        run: |
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export TARGET_PRODUCT=bangkk
+
+          make -C kernel \
+            O=out \
+            ARCH=arm64 \
+            SUBARCH=arm64 \
+            LLVM=1 \
+            HOSTCC=gcc \
+            HOSTCXX=g++ \
+            HOSTLD=g++ \
+            KCFLAGS="$KCFLAGS" \
+            -j"$(nproc)" \
+            Image.gz dtbs modules
+
+      - name: Install modules to staging
+        run: |
+          make -C kernel \
+            O=out \
+            ARCH=arm64 \
+            LLVM=1 \
+            HOSTCC=gcc \
+            HOSTCXX=g++ \
+            HOSTLD=g++ \
+            modules_install \
+            INSTALL_MOD_PATH="$GITHUB_WORKSPACE/modules-staging"
+
+      - name: Collect build outputs
+        run: |
+          mkdir -p artifacts
+
+          cp kernel/out/arch/arm64/boot/Image \
+            artifacts/Image
+
+          cp kernel/out/arch/arm64/boot/Image.gz \
+            artifacts/Image.gz
+
+          cp -a kernel/out/arch/arm64/boot/dts \
+            artifacts/dts
+
+          if [ -d modules-staging/lib/modules ]; then
+            cp -a modules-staging/lib/modules \
+              artifacts/modules
+          fi
+
+          make -s -C kernel O=out ARCH=arm64 kernelrelease \
+            > artifacts/kernel-release.txt
+
+          tar -czf artifacts/dtbs.tar.gz \
+            -C artifacts dts
+
+          if [ -d artifacts/modules ]; then
+            tar -czf artifacts/modules.tar.gz \
+              -C artifacts modules
+          fi
+
+      - name: Stage AnyKernel3 package
+        run: |
+          cp kernel/out/arch/arm64/boot/Image \
+            AnyKernel3/Image
+
+          cp kernel/out/arch/arm64/boot/Image.gz \
+            AnyKernel3/Image.gz
+
+          if [ -d modules-staging/lib/modules ]; then
+            mkdir -p AnyKernel3/vendor_ramdisk/lib/modules
+
+            cp -a modules-staging/lib/modules/. \
+              AnyKernel3/vendor_ramdisk/lib/modules/
+          fi
+
+          cd AnyKernel3
+          zip -r ../artifacts/NekoryKernel-bangkk.zip . \
+            -x ".git/*"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: NekoryKernel-bangkk
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
+          
