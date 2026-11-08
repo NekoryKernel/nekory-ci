@@ -1,5 +1,5 @@
-# nekory bangkk defconfig (5.4.302) @ 85f2e823a
-# camadas: holi-qgki + lineage_moto-holi + moto-holi-bangkk + nekory-bangkk
+# nekory bangkk defconfig (5.4.302) + SUSFS inline @ 85f2e823a
+# layers: holi-qgki + lineage_moto-holi + moto-holi-bangkk + nekory-bangkk
 CONFIG_LOCALVERSION="-moto-NekoryKernel"
 # CONFIG_LOCALVERSION_AUTO is not set
 CONFIG_AUDIT=y
@@ -790,7 +790,7 @@ CONFIG_MMI_ANNOTATE=m
 CONFIG_MMI_INFO=m
 CONFIG_MMI_RELAY=m
 CONFIG_SENSORS_CLASS=m
-# CONFIG_KSU_SUSFS is not set
+CONFIG_KSU_SUSFS=y
 CONFIG_FS_EPOLL_WAKEUP_DEBUG=y
 CONFIG_EXT4_FS=y
 CONFIG_EXT4_FS_POSIX_ACL=y
