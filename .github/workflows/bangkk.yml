@@ -59,6 +59,10 @@ jobs:
           repository: NekoryKernel/nekory-ci
           path: ci
 
+      - name: Compute kernel localversion
+        run: |
+          echo "LOCALVERSION=-$(git -C kernel rev-parse --short=8 HEAD)" >> "$GITHUB_ENV"
+
       - name: Install host dependencies
         run: |
           sudo apt-get update
@@ -136,7 +140,7 @@ jobs:
 
           grep -qx 'CONFIG_LOCALVERSION="-moto-NekoryKernel"' "$CONFIG"
           grep -qx '# CONFIG_LOCALVERSION_AUTO is not set' "$CONFIG"
-          grep -qx '# CONFIG_KSU_SUSFS is not set' "$CONFIG"
+          grep -qx 'CONFIG_KSU_SUSFS=y' "$CONFIG"
           grep -qx 'CONFIG_KSU=y' "$CONFIG"
 
           echo "Kernel configuration validated."
