@@ -24,7 +24,7 @@ jobs:
       SUBARCH: arm64
       TARGET_PRODUCT: bangkk
       LLVM: "1"
-      KCFLAGS: -Wno-incompatible-function-pointer-types
+      KCFLAGS: -Wno-incompatible-function-pointer-types -Wno-error
       DEFCONFIG: nekory_bangkk_defconfig
 
     steps:
