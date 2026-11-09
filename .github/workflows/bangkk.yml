@@ -53,6 +53,11 @@ jobs:
           path: AnyKernel3
           fetch-depth: 1
 
+      - name: Set AnyKernel3 kernel string
+        run: |
+          sed -i 's/^kernel\.string=.*/kernel.string=NekoryKernel-SM6375/' \
+            AnyKernel3/anykernel.sh
+
       - name: Checkout CI configuration
         uses: actions/checkout@v4
         with:
@@ -109,7 +114,7 @@ jobs:
           test -f ci/$DEFCONFIG
 
           grep -q 'device.name1=bangkk' AnyKernel3/anykernel.sh
-          grep -q 'kernel.string=—WearyStars⭐-Sunlight' AnyKernel3/anykernel.sh
+          grep -qx 'kernel.string=NekoryKernel-SM6375' AnyKernel3/anykernel.sh
 
       - name: Prepare defconfig
         run: |
@@ -167,7 +172,14 @@ jobs:
             HOSTCC=gcc \
             HOSTCXX=g++ \
             modules_install \
+            INSTALL_MOD_STRIP=1 \
             INSTALL_MOD_PATH="$GITHUB_WORKSPACE/modules-staging"
+
+          # build/ e source/ apontam pro fonte do runner, nao servem no aparelho
+          # e o zip seguiria esses links e empacotaria o kernel inteiro
+          rm -f modules-staging/lib/modules/*/build \
+                modules-staging/lib/modules/*/source
+          du -sh modules-staging
 
       - name: Collect build outputs
         run: |
@@ -220,8 +232,13 @@ jobs:
 
           cd AnyKernel3
 
-          zip -r ../artifacts/NekoryKernel-bangkk.zip . \
+          du -sh .
+          df -h /
+
+          zip -ry ../artifacts/NekoryKernel-bangkk.zip . \
             -x ".git" ".git/*"
+
+          ls -lh ../artifacts/NekoryKernel-bangkk.zip
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
