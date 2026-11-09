@@ -216,11 +216,9 @@ jobs:
 
       - name: Stage AnyKernel3 package
         run: |
-          # AnyKernel3 uses Image as its kernel payload.
           cp kernel/out/arch/arm64/boot/Image \
             AnyKernel3/Image
 
-          # The installer copies this directory into vendor_boot.
           if [ -d modules-staging/lib/modules ]; then
             mkdir -p AnyKernel3/vendor_ramdisk/lib/modules
 
@@ -230,15 +228,18 @@ jobs:
 
           mkdir -p artifacts
 
+          find AnyKernel3 -type f -iname "*.zip" -delete
+
           cd AnyKernel3
 
-          du -sh .
-          df -h /
+          zip -ry "$RUNNER_TEMP/NekoryKernel-bangkk.zip" . \
+            -x ".git/*"
 
-          zip -ry ../artifacts/NekoryKernel-bangkk.zip . \
-            -x ".git" ".git/*" "*.zip"
-          ls -lh ../artifacts/NekoryKernel-bangkk.zip
+          unzip -Z1 "$RUNNER_TEMP/NekoryKernel-bangkk.zip" \
+            | grep -E '(^META-INF/|\.zip$)' || true
 
+          mv "$RUNNER_TEMP/NekoryKernel-bangkk.zip" \
+            ../artifacts/NekoryKernel-bangkk.zip
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
