@@ -236,8 +236,7 @@ jobs:
           df -h /
 
           zip -ry ../artifacts/NekoryKernel-bangkk.zip . \
-            -x ".git" ".git/*"
-
+            -x ".git" ".git/*" "*.zip"
           ls -lh ../artifacts/NekoryKernel-bangkk.zip
 
       - name: Upload artifacts
