@@ -226,20 +226,31 @@ jobs:
               AnyKernel3/vendor_ramdisk/lib/modules/
           fi
 
-          mkdir -p artifacts
-
-          find AnyKernel3 -type f -iname "*.zip" -delete
+          TEMP_DIR=$(mktemp -d)
 
           cd AnyKernel3
 
           zip -ry "$RUNNER_TEMP/NekoryKernel-bangkk.zip" . \
             -x ".git/*"
 
-          unzip -Z1 "$RUNNER_TEMP/NekoryKernel-bangkk.zip" \
-            | grep -E '(^META-INF/|\.zip$)' || true
+          cd "$TEMP_DIR"
 
-          mv "$RUNNER_TEMP/NekoryKernel-bangkk.zip" \
-            ../artifacts/NekoryKernel-bangkk.zip
+          unzip -q "$RUNNER_TEMP/NekoryKernel-bangkk.zip" \
+            -d "$TEMP_DIR"
+
+          find "$TEMP_DIR" -type f -name "*.zip" -print0 |
+          while IFS= read -r -d '' nested_zip; do
+            if unzip -Z1 "$nested_zip" | grep -q '^META-INF/'; then
+              unzip -oq "$nested_zip" -d "$TEMP_DIR"
+              rm -f "$nested_zip"
+            fi
+          done
+
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+
+          zip -qr "$GITHUB_WORKSPACE/artifacts/NekoryKernel-bangkk.zip" .
+
+          rm -rf "$TEMP_DIR" "$RUNNER_TEMP/NekoryKernel-bangkk.zip"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
